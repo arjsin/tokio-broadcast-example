@@ -27,7 +27,7 @@ impl<R: Read> Future for ChannelWriter<R> {
             unsafe {
                 buf.set_len(n);
             }
-            if let Err(_) = self.sender.send(buf) {
+            if self.sender.send(buf).is_err() {
                 println!("channel wrote {} bytes", n);
                 Ok(().into())
             } else {

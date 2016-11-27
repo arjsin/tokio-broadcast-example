@@ -34,7 +34,7 @@ impl<W: Write> Future for ChannelReader<W> {
                     Err(e) => return Err(e.into()),
                 };
             }
-            if let Some(_) = self.buffer {
+            if self.buffer.is_some() {
                 self.buffer = None;
             }
             match self.receiver.poll() {
