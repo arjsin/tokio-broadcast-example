@@ -1,7 +1,7 @@
 use std::io::{self, Write, ErrorKind};
 use futures::{Future, Poll, Async};
 use futures::stream::Stream;
-use tokio_core::channel::Receiver;
+use futures::unsync::mpsc::Receiver;
 use std::mem;
 
 pub struct ChannelReader<W: Write> {
@@ -10,11 +10,13 @@ pub struct ChannelReader<W: Write> {
     receiver: Receiver<Vec<u8>>,
 }
 
-pub fn channel_reader<W: Write>(writer: W, receiver: Receiver<Vec<u8>>) -> ChannelReader<W> {
-    ChannelReader {
-        writer: writer,
-        buffer: None,
-        receiver: receiver,
+impl<W: Write> ChannelReader<W> {
+    pub fn new(writer: W, receiver: Receiver<Vec<u8>>) -> ChannelReader<W> {
+        ChannelReader {
+            writer: writer,
+            buffer: None,
+            receiver: receiver,
+        }
     }
 }
 
@@ -50,7 +52,7 @@ impl<W: Write> Future for ChannelReader<W> {
                 }
                 Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
                 Ok(Async::NotReady) => return Ok(Async::NotReady),
-                Err(e) => return Err(e),
+                Err(_) => return Err(io::Error::new(ErrorKind::Other, "unexpected")),
             };
         }
     }
