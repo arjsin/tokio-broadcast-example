@@ -21,7 +21,7 @@ use channel_writer::ChannelWriter;
 use channel_reader::ChannelReader;
 
 fn main() {
-    let addr = env::args().nth(1).unwrap_or("127.0.0.1:8080".to_string());
+    let addr = env::args().nth(1).unwrap_or_else(||"127.0.0.1:8080".to_string());
     let addr = addr.parse::<SocketAddr>().unwrap();
 
     let mut l = Core::new().unwrap();
@@ -31,17 +31,17 @@ fn main() {
     let tx_local: Rc<RefCell<Vec<mpsc::Sender<_>>>> = Rc::new(RefCell::new(Vec::new()));
     let (tx, rx) = mpsc::channel(1024);
     {
-        let tx_local = tx_local.clone();
+        let tx_local = Rc::clone(&tx_local);
         handle.spawn(rx.for_each(move |data: Vec<u8>| {
             // Here we like to remove closed senders
-            let tx_local = tx_local.clone();
+            let tx_local = Rc::clone(&tx_local);
             loop_fn(0, move |index| if index < (*tx_local).borrow().len() {
                 let sender = (*tx_local)
                     .borrow()
                     .get(index)
                     .expect("index out of range")
                     .clone();
-                let tx_local = tx_local.clone();
+                let tx_local = Rc::clone(&tx_local);
                 let fut = sender.send(data.clone()).then(move |result| {
                     if result.is_ok() {
                         Ok(Loop::Continue(index + 1))

@@ -33,7 +33,7 @@ impl<W: Write> Future for ChannelReader<W> {
                         self.buffer = Some(buffer);
                         return Ok(Async::NotReady);
                     }
-                    Err(e) => return Err(e.into()),
+                    Err(e) => return Err(e),
                 };
             }
             if self.buffer.is_some() {
@@ -47,7 +47,7 @@ impl<W: Write> Future for ChannelReader<W> {
                             self.buffer = Some(data);
                             return Ok(Async::NotReady);
                         }
-                        Err(e) => return Err(e.into()),
+                        Err(e) => return Err(e),
                     };
                 }
                 Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
