@@ -5,8 +5,8 @@ use std::sync::Arc;
 mod channel_reader;
 mod channel_writer;
 
-use channel_reader::channel_reader;
-use channel_writer::channel_writer;
+use channel_reader::read_channel;
+use channel_writer::write_channel;
 use futures::channel::mpsc;
 use futures::future::select;
 use futures::pin_mut;
@@ -23,36 +23,35 @@ async fn main() {
     let addr = addr.parse::<SocketAddr>().unwrap();
 
     let listener = TcpListener::bind(&addr).await.unwrap();
-    let tx_local: Arc<RwLock<Vec<mpsc::Sender<Vec<u8>>>>> = Arc::new(RwLock::new(Vec::new()));
-    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(1024);
+    let all_clients_tx: Arc<RwLock<Vec<mpsc::Sender<Vec<u8>>>>> = Arc::new(RwLock::new(Vec::new()));
+    let (broadcast_tx, mut broadcast_rx) = mpsc::channel::<Vec<u8>>(1024);
 
-    let tx_local_clone = Arc::clone(&tx_local);
+    let all_clients_tx_clone = Arc::clone(&all_clients_tx);
 
     // Spawn a task to handle incoming data and distribute it to all senders
     tokio::spawn(async move {
-        while let Some(data) = rx.next().await {
-            let mut tx_local = tx_local_clone.write().await;
-            tx_local.retain(|sender| sender.clone().try_send(data.clone()).is_ok());
+        while let Some(data) = broadcast_rx.next().await {
+            let mut senders = all_clients_tx_clone.write().await;
+            senders.retain(|sender| sender.clone().try_send(data.clone()).is_ok());
         }
     });
 
     println!("Listening on: {}", addr);
 
     while let Ok((socket, addr)) = listener.accept().await {
-        let main_tx = tx.clone();
-        let (tx, mut handle_rx) = mpsc::channel(1024);
-        tx_local.write().await.push(tx);
+        let mut main_tx = broadcast_tx.clone();
+        let (client_tx, mut client_rx) = mpsc::channel(1024);
+        all_clients_tx.write().await.push(client_tx);
 
-        let (mut reader, mut writer) = socket.into_split();
-        let mut handle_tx = main_tx.clone();
+        let (mut socket_reader, mut socket_writer) = socket.into_split();
 
         // Spawn a task to handle each connection
         tokio::spawn(async move {
-            let channel_reader = channel_reader(&mut writer, &mut handle_rx);
-            let channel_writer = channel_writer(&mut reader, &mut handle_tx);
-            pin_mut!(channel_reader);
-            pin_mut!(channel_writer);
-            select(channel_reader, channel_writer).await;
+            let read_task = read_channel(&mut socket_writer, &mut client_rx);
+            let write_task = write_channel(&mut socket_reader, &mut main_tx);
+            pin_mut!(read_task);
+            pin_mut!(write_task);
+            select(read_task, write_task).await;
             println!("Disconnected {}", addr);
         });
 

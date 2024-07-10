@@ -1,7 +1,7 @@
 use futures::{channel::mpsc::Receiver, StreamExt};
 use tokio::io::AsyncWriteExt;
 
-pub async fn channel_reader<W: AsyncWriteExt + Unpin>(
+pub async fn read_channel<W: AsyncWriteExt + Unpin>(
     writer: &mut W,
     rx: &mut Receiver<Vec<u8>>,
 ) {
